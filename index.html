@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>2D Pixel RPG Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #090c10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #e0e6ed;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      border: 4px solid #232c3d;
+      border-radius: 8px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.9);
+      background: #000;
+      overflow: hidden;
+    }
+    canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+    }
+
+    /* ============================================================
+       1. CHARACTER HUD (Sliced from character_panel.png)
+       ============================================================ */
+    .hud-container {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 10;
+      pointer-events: none;
+      filter: drop-shadow(0 4px 10px rgba(0,0,0,0.8));
+    }
+    .hud-frame {
+      width: 258px;
+      height: 96px;
+      position: relative;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/character_panel.png') no-repeat;
+      background-position: 0 0;
+      background-size: 576px 480px;
+      image-rendering: pixelated;
+    }
+    .hud-bar-hp-slot {
+      position: absolute;
+      left: 93px;
+      top: 30px;
+      width: 153px;
+      height: 6px;
+      overflow: hidden;
+      border-radius: 2px;
+    }
+    .hud-bar-hp-fill {
+      height: 100%;
+      width: 100%;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/character_panel.png') no-repeat;
+      background-position: -45px -414px;
+      background-size: 576px 480px;
+      image-rendering: pixelated;
+      transition: width 0.2s ease;
+    }
+    .hud-bar-sp-slot {
+      position: absolute;
+      left: 99px;
+      top: 45px;
+      width: 126px;
+      height: 6px;
+      overflow: hidden;
+      border-radius: 2px;
+    }
+    .hud-bar-sp-fill {
+      height: 100%;
+      width: 100%;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/character_panel.png') no-repeat;
+      background-position: -48px -429px;
+      background-size: 576px 480px;
+      image-rendering: pixelated;
+      transition: width 0.1s ease;
+    }
+    .hud-bar-exp-slot {
+      position: absolute;
+      left: 99px;
+      top: 60px;
+      width: 108px;
+      height: 6px;
+      overflow: hidden;
+      border-radius: 2px;
+    }
+    .hud-bar-exp-fill {
+      height: 100%;
+      width: 100%;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/character_panel.png') no-repeat;
+      background-position: -48px -444px;
+      background-size: 576px 480px;
+      image-rendering: pixelated;
+    }
+
+    /* CONTROLS HINT (BOTTOM) */
+    .controls-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 14, 12, 0.94);
+      border: 2px solid #855f3f;
+      border-radius: 6px;
+      padding: 6px 18px;
+      font-size: 13px;
+      color: #e5d6a1;
+      display: flex;
+      gap: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.85);
+      pointer-events: none;
+      z-index: 10;
+    }
+    .key-badge {
+      background: #3e2617;
+      border: 1px solid #ffd154;
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: #ffd154;
+      font-weight: bold;
+      font-size: 11px;
+    }
+
+    /* MODAL BACKDROP */
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 5, 4, 0.78);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    /* ============================================================
+       2. EXACT PARCHMENT SCROLL TEMPLATE (Sliced from Main_menu.png)
+       Sheet total: 496 x 176
+       Blank Scroll Panel: x=96, y=4, w=80, h=168
+       Scaled 3.2x:
+       Width = 80 * 3.2 = 256px
+       Height = 168 * 3.2 = 538px
+       Sheet scaled size = 496*3.2 = 1587.2px by 176*3.2 = 563.2px
+       Background offset: x = -96*3.2 = -307.2px, y = -4*3.2 = -12.8px
+       ============================================================ */
+    .pixel-scroll-window {
+      width: 256px;
+      height: 538px;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/Main_menu.png') no-repeat;
+      background-position: -307px -13px;
+      background-size: 1587px 563px;
+      image-rendering: pixelated;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.95);
+      animation: popIn 0.15s ease-out;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.93); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* Close [X] Button on top-right of scroll (rel x=69, y=8 in base => 3.2x: right=16px, top=16px) */
+    .scroll-close-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      outline: none;
+      z-index: 20;
+    }
+    .scroll-close-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    .modal-view {
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 36px;
+    }
+    .modal-view.active {
+      display: flex;
+    }
+
+    /* ============================================================
+       3. PRE-BAKED GREEN BUTTONS FROM Main_menu.png
+       Button slice: w=56, h=12 => Scaled 3.2x: w=179px, h=38px
+       Sheet scaled size = 1587px by 563px
+       X position: -189 * 3.2 = -605px
+       Offsets:
+       - Blank: Y=2 => -2*3.2 = -6px
+       - RESUME: Y=18 => -18*3.2 = -58px
+       - RESTART: Y=34 => -34*3.2 = -109px
+       - SETTINGS: Y=50 => -50*3.2 = -160px
+       - LEVELS: Y=66 => -66*3.2 = -211px
+       - INVENTORY: Y=82 => -82*3.2 = -262px
+       - EQUIPMENT: Y=98 => -98*3.2 = -314px
+       - SHOP: Y=114 => -114*3.2 = -365px
+       - CRAFT: Y=130 => -130*3.2 = -416px
+       - QUIT: Y=146 => -146*3.2 = -467px
+       ============================================================ */
+    .menu-btn-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .menu-sprite-btn {
+      width: 179px;
+      height: 38px;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/Main_menu.png') no-repeat;
+      background-size: 1587px 563px;
+      image-rendering: pixelated;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: filter 0.08s ease, transform 0.08s ease;
+    }
+    .menu-sprite-btn:hover {
+      filter: brightness(1.18);
+      transform: translateY(-2px);
+    }
+    .menu-sprite-btn:active {
+      transform: translateY(2px);
+      filter: brightness(0.92);
+    }
+
+    /* Specific Pre-Baked Button Slices */
+    .btn-slice-resume {
+      background-position: -605px -58px;
+    }
+    .btn-slice-restart {
+      background-position: -605px -109px;
+    }
+    .btn-slice-settings {
+      background-position: -605px -160px;
+    }
+    .btn-slice-levels {
+      background-position: -605px -211px;
+    }
+    .btn-slice-inventory {
+      background-position: -605px -262px;
+    }
+    .btn-slice-equipment {
+      background-position: -605px -314px;
+    }
+    .btn-slice-shop {
+      background-position: -605px -365px;
+    }
+    .btn-slice-craft {
+      background-position: -605px -416px;
+    }
+    .btn-slice-quit {
+      background-position: -605px -467px;
+    }
+
+    /* Blank Button (for custom text like BACK) */
+    .btn-slice-blank {
+      background-position: -605px -6px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+      color: #110b00;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+    }
+
+    /* ============================================================
+       4. SETTINGS VIEW (Inside the exact parchment scroll)
+       ============================================================ */
+    .settings-scroll-content {
+      width: 100%;
+      padding: 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .settings-title-badge {
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #110b00;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+    }
+
+    .settings-card-row {
+      width: 100%;
+      background: rgba(80, 50, 30, 0.12);
+      border-radius: 4px;
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .settings-row-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .settings-label-text {
+      font-size: 12px;
+      font-weight: 900;
+      color: #110b00;
+      letter-spacing: 0.5px;
+    }
+
+    /* Sliced Icons from Settings.png */
+    .sprite-icon-speaker {
+      width: 28px;
+      height: 26px;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/Settings.png') no-repeat;
+      background-position: -528px -41px;
+      background-size: 739px 563px;
+      image-rendering: pixelated;
+    }
+    .sprite-icon-music {
+      width: 28px;
+      height: 28px;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/Settings.png') no-repeat;
+      background-position: -528px -75px;
+      background-size: 739px 563px;
+      image-rendering: pixelated;
+    }
+
+    /* Volume Tick Bars */
+    .vol-ticks-container {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+      cursor: pointer;
+    }
+    .vol-tick {
+      width: 8px;
+      height: 16px;
+      background: #73543d;
+      border: 1px solid #4a3424;
+      image-rendering: pixelated;
+      transition: background 0.1s ease;
+    }
+    .vol-tick.active {
+      background: #27ae60;
+      border-color: #1e824c;
+      box-shadow: 0 0 2px rgba(39, 174, 96, 0.6);
+    }
+
+    /* Checkboxes */
+    .sprite-checkbox {
+      width: 22px;
+      height: 24px;
+      background: url('craftpix-net-255216-free-basic-pixel-art-ui-for-rpg/PNG/Settings.png') no-repeat;
+      background-size: 739px 563px;
+      image-rendering: pixelated;
+      cursor: pointer;
+    }
+    .sprite-checkbox.checked {
+      background-position: -528px -112px;
+    }
+    .sprite-checkbox.unchecked {
+      background-position: -528px -147px;
+    }
+
+    /* Zoom Stepper */
+    .zoom-btn {
+      width: 24px;
+      height: 24px;
+      background: #50321e;
+      border: 1px solid #855f3f;
+      border-radius: 3px;
+      color: #ffd154;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .zoom-btn:hover {
+      background: #6e462b;
+      color: #fff;
+    }
+
+    /* TOAST MESSAGE */
+    .toast-msg {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e130c;
+      border: 3px solid #ffd154;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.85);
+      color: #ffd154;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 800;
+      text-shadow: 1px 1px #000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 200;
+    }
+    .toast-msg.show {
+      opacity: 1;
+      transform: translate(-50%, 10px);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <canvas id="gameCanvas" width="960" height="640"></canvas>
+    
+    <!-- 1. CLEAN SLICED CHARACTER HUD (character_panel.png) -->
+    <div class="hud-container">
+      <div class="hud-frame">
+        <div class="hud-bar-hp-slot">
+          <div id="hp-bar" class="hud-bar-hp-fill"></div>
+        </div>
+        <div class="hud-bar-sp-slot">
+          <div id="sp-bar" class="hud-bar-sp-fill"></div>
+        </div>
+        <div class="hud-bar-exp-slot">
+          <div id="exp-bar" class="hud-bar-exp-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast-msg">Game Saved Successfully!</div>
+
+    <!-- Controls hint -->
+    <div class="controls-hint">
+      <span><span class="key-badge">W A S D</span> : Move</span>
+      <span><span class="key-badge">Shift</span> : Sprint</span>
+      <span><span class="key-badge">Space</span> : Attack</span>
+      <span><span class="key-badge">ESC</span> : Pause / Menu</span>
+    </div>
+
+    <!-- 2. EXACT MATCH TO USER IMAGE: Main_menu.png PARCHMENT SCROLL MODAL -->
+    <div id="pauseModal" class="modal-backdrop">
+      <div class="pixel-scroll-window">
+        <!-- Close [X] top-right button -->
+        <button class="scroll-close-btn" id="btnCloseModal" title="Resume / Close"></button>
+
+        <!-- A. MAIN PAUSE MENU (All pre-baked buttons matching the uploaded sprite sheet) -->
+        <div id="pauseMainView" class="modal-view active">
+          <div class="menu-btn-column">
+            <button class="menu-sprite-btn btn-slice-resume" id="btnResume" title="Resume Game"></button>
+            <button class="menu-sprite-btn btn-slice-restart" id="btnRestart" title="Restart Level"></button>
+            <button class="menu-sprite-btn btn-slice-settings" id="btnSettings" title="Settings"></button>
+            <button class="menu-sprite-btn btn-slice-levels" id="btnLevels" title="Levels"></button>
+            <button class="menu-sprite-btn btn-slice-inventory" id="btnInventory" title="Inventory"></button>
+            <button class="menu-sprite-btn btn-slice-equipment" id="btnEquipment" title="Equipment"></button>
+            <button class="menu-sprite-btn btn-slice-shop" id="btnShop" title="Shop"></button>
+            <button class="menu-sprite-btn btn-slice-craft" id="btnCraft" title="Craft"></button>
+            <button class="menu-sprite-btn btn-slice-quit" id="btnQuit" title="Exit Game"></button>
+          </div>
+        </div>
+
+        <!-- B. SETTINGS MENU VIEW (Inside the exact scroll template) -->
+        <div id="settingsView" class="modal-view">
+          <div class="settings-scroll-content">
+            <div class="settings-title-badge">SETTINGS</div>
+
+            <!-- Sound Volume -->
+            <div class="settings-card-row">
+              <div class="settings-row-left">
+                <div class="sprite-icon-speaker"></div>
+                <span class="settings-label-text">SOUND</span>
+              </div>
+              <div class="vol-ticks-container" id="soundTicks"></div>
+            </div>
+
+            <!-- Music Volume -->
+            <div class="settings-card-row">
+              <div class="settings-row-left">
+                <div class="sprite-icon-music"></div>
+                <span class="settings-label-text">MUSIC</span>
+              </div>
+              <div class="vol-ticks-container" id="musicTicks"></div>
+            </div>
+
+            <!-- Fullscreen -->
+            <div class="settings-card-row">
+              <span class="settings-label-text">FULL SCREEN</span>
+              <div id="chkFullscreen" class="sprite-checkbox unchecked"></div>
+            </div>
+
+            <!-- Window Mode -->
+            <div class="settings-card-row">
+              <span class="settings-label-text">WINDOW MODE</span>
+              <div id="chkWindow" class="sprite-checkbox checked"></div>
+            </div>
+
+            <!-- Zoom Camera -->
+            <div class="settings-card-row">
+              <span class="settings-label-text">ZOOM CAMERA</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button class="zoom-btn" id="btnZoomOut">-</button>
+                <span id="zoomVal" style="font-size: 12px; font-weight: 900; color: #110b00; width: 30px; text-align: center;">1.0x</span>
+                <button class="zoom-btn" id="btnZoomIn">+</button>
+              </div>
+            </div>
+
+            <!-- Back to Pause button -->
+            <button class="menu-sprite-btn btn-slice-blank" id="btnSettingsBack" style="margin-top: 14px;">BACK</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    // Game state
+    let isPaused = false;
+    let gameScale = 1.0;
+    let soundVolume = 7;
+    let musicVolume = 6;
+
+    // Game World config
+    const WORLD_WIDTH = 1920;
+    const WORLD_HEIGHT = 1440;
+
+    // Environment & Static Objects
+    const house = {
+      x: WORLD_WIDTH / 2 - 160,
+      y: WORLD_HEIGHT / 2 - 240,
+      width: 320,
+      height: 400,
+      collider: {
+        offsetX: 20,
+        offsetY: 180,
+        width: 280,
+        height: 200
+      }
+    };
+
+    // Camera
+    const camera = {
+      x: 0,
+      y: 0,
+      width: canvas.width,
+      height: canvas.height,
+      update(targetX, targetY) {
+        const viewW = this.width / gameScale;
+        const viewH = this.height / gameScale;
+        this.x = targetX - viewW / 2;
+        this.y = targetY - viewH / 2;
+        this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - viewW));
+        this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - viewH));
+      }
+    };
+
+    // Assets loader
+    const assets = {
+      house: new Image(),
+      fieldsTileset: new Image(),
+      shadow1: new Image(),
+      shadow2: new Image(),
+      shadow3: new Image(),
+      shadow4: new Image(),
+      shadow5: new Image(),
+      shadow6: new Image(),
+      idle: new Image(),
+      walk: new Image(),
+      run: new Image(),
+      attack: new Image()
+    };
+
+    assets.house.src = 'craftpix-net-812442-free-fantasy-medieval-village-buildings-asset-pack/PNG/Houses and Warehouses_Wooden House - Level 1.png';
+    assets.fieldsTileset.src = 'craftpix-net-504452-free-village-pixel-tileset-for-top-down-defense/1 Tiles/FieldsTileset.png';
+    assets.shadow1.src = 'craftpix-net-504452-free-village-pixel-tileset-for-top-down-defense/2 Objects/1 Shadow/1.png';
+    assets.shadow2.src = 'craftpix-net-504452-free-village-pixel-tileset-for-top-down-defense/2 Objects/1 Shadow/2.png';
+    assets.shadow3.src = 'craftpix-net-504452-free-village-pixel-tileset-for-top-down-defense/2 Objects/1 Shadow/3.png';
+    assets.shadow4.src = 'craftpix-net-504452-free-village-pixel-tileset-for-top-down-defense/2 Objects/1 Shadow/4.png';
+    assets.shadow5.src = 'craftpix-net-504452-free-village-pixel-tileset-for-top-down-defense/2 Objects/1 Shadow/5.png';
+    assets.shadow6.src = 'craftpix-net-504452-free-village-pixel-tileset-for-top-down-defense/2 Objects/1 Shadow/6.png';
+
+    assets.idle.src = 'craftpix-net-180537-free-swordsman-1-3-level-pixel-top-down-sprite-character/PNG/Swordsman_lvl1/With_shadow/Swordsman_lvl1_Idle_with_shadow.png';
+    assets.walk.src = 'craftpix-net-180537-free-swordsman-1-3-level-pixel-top-down-sprite-character/PNG/Swordsman_lvl1/With_shadow/Swordsman_lvl1_Walk_with_shadow.png';
+    assets.run.src = 'craftpix-net-180537-free-swordsman-1-3-level-pixel-top-down-sprite-character/PNG/Swordsman_lvl1/With_shadow/Swordsman_lvl1_Run_with_shadow.png';
+    assets.attack.src = 'craftpix-net-180537-free-swordsman-1-3-level-pixel-top-down-sprite-character/PNG/Swordsman_lvl1/With_shadow/Swordsman_lvl1_attack_with_shadow.png';
+
+    // Trees & Forest Flora (Clean sprites without baked shadows; shadows rendered underneath from 2 Objects/1 Shadow)
+    const treeAssetMap = {
+      treeOak: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Tree1.png',
+      treeMedium: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Tree2.png',
+      treeSmall: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Tree3.png',
+      treeMossBig: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Moss_tree1.png',
+      treeMossMed: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Moss_tree2.png',
+      treeFruit: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Fruit_tree1.png',
+      treeFlower: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Flower_tree1.png',
+      stump1: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Broken_tree1.png',
+      stumpMoss: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Broken_tree2.png',
+      log: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Broken_tree3.png',
+      logBranch: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Broken_tree4.png',
+      bigHollowLog: 'craftpix-net-385863-free-top-down-trees-pixel-art/PNG/Assets_separately/Trees/Broken_tree7.png'
+    };
+
+    for (const key in treeAssetMap) {
+      assets[key] = new Image();
+      assets[key].src = treeAssetMap[key];
+    }
+
+    // Helper to instantiate tree objects with accurate pixel size, base collision, and shadow specs
+    function createTree(type, x, y) {
+      let rad = 14, baseOffsetY = 20, w = 120, h = 120;
+      let shadow = 'shadow5', shadowW = 105, shadowH = 60, shadowOffsetY = 8;
+
+      if (type === 'treeOak' || type === 'treeMossBig' || type === 'treeFruit' || type === 'treeFlower') {
+        rad = 20; baseOffsetY = 68; w = 220; h = 220;
+        shadow = 'shadow6'; shadowW = 160; shadowH = 85; shadowOffsetY = 12;
+      } else if (type === 'treeMedium' || type === 'treeMossMed') {
+        rad = 12; baseOffsetY = 36; w = 120; h = 120;
+        shadow = 'shadow5'; shadowW = 105; shadowH = 60; shadowOffsetY = 8;
+      } else if (type === 'treeSmall') {
+        rad = 12; baseOffsetY = 36; w = 120; h = 120;
+        shadow = 'shadow4'; shadowW = 80; shadowH = 48; shadowOffsetY = 6;
+      } else if (type === 'stump1' || type === 'stumpMoss') {
+        rad = 10; baseOffsetY = 8; w = 56; h = 56;
+        shadow = 'shadow2'; shadowW = 48; shadowH = 30; shadowOffsetY = 4;
+      } else if (type === 'log' || type === 'logBranch') {
+        rad = 16; baseOffsetY = 4; w = 90; h = 90;
+        shadow = 'shadow3'; shadowW = 75; shadowH = 40; shadowOffsetY = 4;
+      } else if (type === 'bigHollowLog') {
+        rad = 26; baseOffsetY = 6; w = 180; h = 180;
+        shadow = 'shadow6'; shadowW = 160; shadowH = 65; shadowOffsetY = 4;
+      }
+      return {
+        type, x, y, w, h,
+        baseX: x,
+        baseY: y + baseOffsetY,
+        radius: rad,
+        shadow, shadowW, shadowH, shadowOffsetY
+      };
+    }
+
+    const trees = [];
+    // 1. North dense forest wall (y = 50..260)
+    for (let x = 60; x <= 1860; x += 130) {
+      const t = (Math.floor(x / 130) % 2 === 0) ? 'treeMossBig' : 'treeOak';
+      trees.push(createTree(t, x, 70));
+    }
+    for (let x = 120; x <= 1820; x += 140) {
+      const t = (Math.floor(x / 140) % 2 === 0) ? 'treeMedium' : 'treeMossMed';
+      trees.push(createTree(t, x, 180));
+    }
+    // Backdrop directly behind the cabin
+    for (let x = 710; x <= 1220; x += 110) {
+      trees.push(createTree('treeMossBig', x, 310));
+    }
+
+    // 2. West dense forest wall (x = 50..300, y = 250..1380)
+    for (let y = 250; y <= 1380; y += 130) {
+      const t = (Math.floor(y / 130) % 2 === 0) ? 'treeOak' : 'treeMossBig';
+      trees.push(createTree(t, 80, y));
+      trees.push(createTree('treeMedium', 190, y + 40));
+      trees.push(createTree('treeSmall', 280, y + 80));
+    }
+
+    // 3. East dense forest wall (x = 1620..1870, y = 250..1380)
+    for (let y = 250; y <= 1380; y += 130) {
+      const t = (Math.floor(y / 130) % 2 === 0) ? 'treeOak' : 'treeFruit';
+      trees.push(createTree(t, 1840, y));
+      trees.push(createTree('treeMedium', 1730, y + 50));
+      trees.push(createTree('treeMossMed', 1640, y + 90));
+    }
+
+    // 4. South forest wall (y = 1260..1380), leaving path opening at x=880..1040
+    for (let x = 80; x <= 850; x += 130) {
+      trees.push(createTree('treeOak', x, 1340));
+      trees.push(createTree('treeMedium', x + 50, 1250));
+    }
+    for (let x = 1080; x <= 1860; x += 130) {
+      trees.push(createTree('treeMossBig', x, 1340));
+      trees.push(createTree('treeMedium', x + 50, 1250));
+    }
+
+    // 5. House flanks
+    trees.push(createTree('treeOak', 690, 600));
+    trees.push(createTree('treeMedium', 710, 720));
+    trees.push(createTree('treeMossMed', 1230, 600));
+    trees.push(createTree('treeFlower', 1240, 720));
+
+    // 6. Woodcutter's Grove (West: x ~ 460..680, y ~ 800..980)
+    trees.push(createTree('treeMossBig', 460, 820));
+    trees.push(createTree('stump1', 530, 860));
+    trees.push(createTree('stumpMoss', 610, 850));
+    trees.push(createTree('log', 560, 910));
+    trees.push(createTree('logBranch', 640, 950));
+    trees.push(createTree('treeMedium', 440, 970));
+
+    // 7. East Orchard & Blossom Grove (East: x ~ 1280..1520, y ~ 780..1020)
+    trees.push(createTree('treeFruit', 1330, 820));
+    trees.push(createTree('treeFruit', 1470, 840));
+    trees.push(createTree('treeFlower', 1360, 960));
+    trees.push(createTree('treeMedium', 1480, 980));
+    trees.push(createTree('stumpMoss', 1270, 910));
+
+    // 8. North-West Thickett
+    trees.push(createTree('bigHollowLog', 520, 480));
+    trees.push(createTree('treeMossBig', 420, 420));
+    trees.push(createTree('treeSmall', 470, 560));
+
+    // 9. North-East Glade
+    trees.push(createTree('treeOak', 1420, 450));
+    trees.push(createTree('treeMedium', 1330, 500));
+    trees.push(createTree('treeFruit', 1490, 570));
+
+    // 10. South clearing shade trees
+    trees.push(createTree('treeMedium', 800, 1100));
+    trees.push(createTree('treeFruit', 1130, 1120));
+    trees.push(createTree('stump1', 770, 980));
+
+    // Ground Canvas pre-renderer (High performance, rendered once)
+    let groundCanvasBuilt = false;
+    const groundCanvas = document.createElement('canvas');
+    groundCanvas.width = WORLD_WIDTH;
+    groundCanvas.height = WORLD_HEIGHT;
+    const gctx = groundCanvas.getContext('2d');
+    gctx.imageSmoothingEnabled = false;
+
+    function buildGroundCanvas() {
+      if (groundCanvasBuilt) return;
+      if (!assets.fieldsTileset.complete || assets.fieldsTileset.naturalWidth === 0) return;
+      for (let i = 1; i <= 6; i++) {
+        const sh = assets['shadow' + i];
+        if (!sh || !sh.complete || sh.naturalWidth === 0) return;
+      }
+
+      const tileSize = 32;
+      const cols = Math.floor(WORLD_WIDTH / tileSize); // 60 cols
+      const rows = Math.floor(WORLD_HEIGHT / tileSize); // 45 rows
+
+      // 1. Uniform Solid Grass Terrain (FieldsTile_38.png across the entire map)
+      const grid = new Array(rows);
+      for (let r = 0; r < rows; r++) {
+        grid[r] = new Uint8Array(cols);
+        grid[r].fill(38); // Clean, solid base grass tile (RGB: 166, 176, 79)
+      }
+
+      // 2. Intentional Dirt Path Network with Clean Edge Autotiling:
+      // A. House Entrance Porch (Rows 28-29, Cols 28-31)
+      grid[28][28] = 6;  grid[28][29] = 35; grid[28][30] = 35; grid[28][31] = 8;
+      grid[29][28] = 26; grid[29][29] = 1;  grid[29][30] = 1;  grid[29][31] = 28;
+
+      // B. Main Vertical Road leading south to map exit (Rows 30-44, Cols 29-30)
+      for (let r = 30; r < rows; r++) {
+        grid[r][29] = 21; // Left grass-to-dirt edge
+        grid[r][30] = 25; // Right dirt-to-grass edge
+      }
+
+      // C. West Path to Woodcutter's Grove (Row 30, Cols 19-28)
+      for (let c = 19; c <= 28; c++) {
+        grid[30][c] = 39; // Straight horizontal dirt path with grass borders
+      }
+      grid[30][29] = 1; // Dirt junction opening into main vertical road
+
+      // Woodcutter's Grove Clearing (Cols 16-19, Rows 29-31)
+      grid[29][16] = 6;  grid[29][17] = 35; grid[29][18] = 35; grid[29][19] = 8;
+      grid[30][16] = 21; grid[30][17] = 1;  grid[30][18] = 1;  grid[30][19] = 39;
+      grid[31][16] = 26; grid[31][17] = 3;  grid[31][18] = 3;  grid[31][19] = 28;
+
+      // D. East Path to Fruit Orchard (Row 32, Cols 31-42)
+      for (let c = 31; c <= 42; c++) {
+        grid[32][c] = 39; // Straight horizontal dirt path with grass borders
+      }
+      grid[32][30] = 1; // Dirt junction opening into main vertical road
+
+      // Orchard Clearing (Cols 42-45, Rows 31-33)
+      grid[31][42] = 6;  grid[31][43] = 35; grid[31][44] = 35; grid[31][45] = 8;
+      grid[32][42] = 39; grid[32][43] = 1;  grid[32][44] = 1;  grid[32][45] = 25;
+      grid[33][42] = 26; grid[33][43] = 3;  grid[33][44] = 3;  grid[33][45] = 28;
+
+      // 3. Render Grid Tiles to Ground Canvas
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const tileId = grid[r][c];
+          const idx = tileId - 1;
+          const sx = (idx % 8) * tileSize;
+          const sy = Math.floor(idx / 8) * tileSize;
+          gctx.drawImage(assets.fieldsTileset, sx, sy, tileSize, tileSize, c * tileSize, r * tileSize, tileSize, tileSize);
+        }
+      }
+
+      // 4. Render Ground Shadow Sprites (from 2 Objects/1 Shadow/)
+      // A. House Foundation Shadow
+      if (assets.shadow6.complete) {
+        gctx.drawImage(assets.shadow6, house.x - 10, house.y + house.height - 50, house.width + 20, 80);
+      }
+
+      // B. Tree & Obstacle Shadows
+      for (const tree of trees) {
+        const shImg = assets[tree.shadow];
+        if (shImg && shImg.complete) {
+          const sx = Math.round(tree.baseX - tree.shadowW / 2);
+          const sy = Math.round(tree.baseY - tree.shadowH / 2 + tree.shadowOffsetY);
+          gctx.drawImage(shImg, sx, sy, tree.shadowW, tree.shadowH);
+        }
+      }
+
+      // C. Rock and Bush Shadows
+      for (const dec of decorations) {
+        const shImg = assets[dec.shadow];
+        if (shImg && shImg.complete) {
+          const sx = Math.round(dec.x - dec.shadowW / 2);
+          const sy = Math.round(dec.y - dec.shadowH / 2 + 10);
+          gctx.drawImage(shImg, sx, sy, dec.shadowW, dec.shadowH);
+        }
+      }
+
+      groundCanvasBuilt = true;
+    }
+
+    // Decorations
+    const decorations = [
+      { x: house.x - 120, y: house.y + 100, radius: 24, type: 'rock', color: '#64748b', shadow: 'shadow3', shadowW: 58, shadowH: 36 },
+      { x: house.x + house.width + 100, y: house.y + 160, radius: 26, type: 'rock', color: '#526075', shadow: 'shadow3', shadowW: 62, shadowH: 38 },
+      { x: house.x - 80, y: house.y + 350, radius: 18, type: 'bush', color: '#2d6a4f', shadow: 'shadow2', shadowW: 44, shadowH: 26 },
+      { x: house.x + house.width + 70, y: house.y + 330, radius: 22, type: 'bush', color: '#1b4332', shadow: 'shadow2', shadowW: 48, shadowH: 28 }
+    ];
+
+    const DIR = { DOWN: 0, LEFT: 1, RIGHT: 2, UP: 3 };
+
+    // Player State
+    const player = {
+      x: WORLD_WIDTH / 2,
+      y: house.y + house.height + 70,
+      vx: 0,
+      vy: 0,
+      speedWalk: 160,
+      speedRun: 260,
+      friction: 0.82,
+      acceleration: 0.25,
+      direction: DIR.DOWN,
+      isAttacking: false,
+      attackTimer: 0,
+      attackDuration: 0.32,
+      state: 'idle',
+      
+      colliderRadius: 12,
+      colliderOffsetY: 18,
+
+      frameSize: 64,
+      drawScale: 2.2,
+      animTimer: 0,
+      currentFrame: 0,
+
+      stamina: 100,
+      maxStamina: 100,
+      sprintExhausted: false,
+      hp: 100,
+      maxHp: 100
+    };
+
+    // Restore saved game
+    try {
+      const saved = localStorage.getItem('pixel_rpg_save');
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.x && data.y) {
+          player.x = data.x;
+          player.y = data.y;
+          player.direction = data.direction || DIR.DOWN;
+        }
+      }
+    } catch(e) {}
+
+    // Input handling
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      const key = e.key.toLowerCase();
+      
+      if (key === 'escape') {
+        togglePauseMenu();
+        return;
+      }
+
+      if (isPaused) return;
+
+      keys[key] = true;
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+        e.preventDefault();
+      }
+      if ((key === ' ' || key === 'j') && !player.isAttacking) {
+        player.triggerAttack();
+      }
+    });
+
+    window.addEventListener('keyup', e => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    player.triggerAttack = function() {
+      if (this.isAttacking) return;
+      this.isAttacking = true;
+      this.attackTimer = 0;
+      this.currentFrame = 0;
+      this.animTimer = 0;
+    };
+
+    // Collision helpers
+    function checkCircleRectCollision(cx, cy, radius, rx, ry, rw, rh) {
+      const closestX = Math.max(rx, Math.min(cx, rx + rw));
+      const closestY = Math.max(ry, Math.min(cy, ry + rh));
+      const dx = cx - closestX;
+      const dy = cy - closestY;
+      return (dx * dx + dy * dy) < (radius * radius);
+    }
+
+    function checkCircleCircleCollision(c1x, c1y, r1, c2x, c2y, r2) {
+      const dx = c1x - c2x;
+      const dy = c1y - c2y;
+      return (dx * dx + dy * dy) < ((r1 + r2) * (r1 + r2));
+    }
+
+    // Animation Config
+    const ANIM_CONFIG = {
+      idle: {
+        sheet: 'idle',
+        frames: { [DIR.DOWN]: 12, [DIR.LEFT]: 12, [DIR.RIGHT]: 12, [DIR.UP]: 4 },
+        fps: 8
+      },
+      walk: {
+        sheet: 'walk',
+        frames: { [DIR.DOWN]: 6, [DIR.LEFT]: 6, [DIR.RIGHT]: 6, [DIR.UP]: 6 },
+        fps: 10
+      },
+      run: {
+        sheet: 'run',
+        frames: { [DIR.DOWN]: 8, [DIR.LEFT]: 8, [DIR.RIGHT]: 8, [DIR.UP]: 8 },
+        fps: 14
+      },
+      attack: {
+        sheet: 'attack',
+        frames: { [DIR.DOWN]: 8, [DIR.LEFT]: 8, [DIR.RIGHT]: 8, [DIR.UP]: 8 },
+        fps: 18
+      }
+    };
+
+    // ============================================================
+    // UI & PAUSE SYSTEM
+    // ============================================================
+    const pauseModal = document.getElementById('pauseModal');
+    const pauseMainView = document.getElementById('pauseMainView');
+    const settingsView = document.getElementById('settingsView');
+    const toast = document.getElementById('toast');
+
+    function showToast(text) {
+      toast.innerText = text;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function togglePauseMenu(forceState) {
+      isPaused = forceState !== undefined ? forceState : !isPaused;
+      if (isPaused) {
+        for (let k in keys) keys[k] = false;
+        pauseModal.classList.add('active');
+        pauseMainView.classList.add('active');
+        settingsView.classList.remove('active');
+      } else {
+        pauseModal.classList.remove('active');
+      }
+    }
+
+    // Close button on top-right of parchment scroll
+    document.getElementById('btnCloseModal').addEventListener('click', () => {
+      togglePauseMenu(false);
+    });
+
+    // Pause Menu actions
+    document.getElementById('btnResume').addEventListener('click', () => {
+      togglePauseMenu(false);
+    });
+
+    document.getElementById('btnRestart').addEventListener('click', () => {
+      if (confirm('Restart level from spawn?')) {
+        player.x = WORLD_WIDTH / 2;
+        player.y = house.y + house.height + 70;
+        player.direction = DIR.DOWN;
+        togglePauseMenu(false);
+      }
+    });
+
+    document.getElementById('btnSettings').addEventListener('click', () => {
+      pauseMainView.classList.remove('active');
+      settingsView.classList.add('active');
+    });
+
+    // Optional informational hooks for the other RPG buttons
+    ['btnLevels', 'btnInventory', 'btnEquipment', 'btnShop', 'btnCraft'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('click', () => {
+          const name = id.replace('btn', '');
+          showToast(name + ' coming soon!');
+        });
+      }
+    });
+
+    document.getElementById('btnQuit').addEventListener('click', () => {
+      if (confirm('Exit game? Any unsaved progress will be lost.')) {
+        window.location.reload();
+      }
+    });
+
+    // Settings back button
+    document.getElementById('btnSettingsBack').addEventListener('click', () => {
+      settingsView.classList.remove('active');
+      pauseMainView.classList.add('active');
+    });
+
+    // Volume Ticks Generator
+    function renderTicks(containerId, currentVal, onSelect) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      for (let i = 1; i <= 10; i++) {
+        const tick = document.createElement('div');
+        tick.className = 'vol-tick' + (i <= currentVal ? ' active' : '');
+        tick.addEventListener('click', () => {
+          onSelect(i);
+          renderTicks(containerId, i, onSelect);
+        });
+        container.appendChild(tick);
+      }
+    }
+
+    renderTicks('soundTicks', soundVolume, (v) => { soundVolume = v; });
+    renderTicks('musicTicks', musicVolume, (v) => { musicVolume = v; });
+
+    // Checkboxes (Fullscreen / Window Mode)
+    const chkFullscreen = document.getElementById('chkFullscreen');
+    const chkWindow = document.getElementById('chkWindow');
+
+    function updateFullscreenState(isFull) {
+      if (isFull) {
+        chkFullscreen.className = 'sprite-checkbox checked';
+        chkWindow.className = 'sprite-checkbox unchecked';
+      } else {
+        chkFullscreen.className = 'sprite-checkbox unchecked';
+        chkWindow.className = 'sprite-checkbox checked';
+      }
+    }
+
+    chkFullscreen.addEventListener('click', () => {
+      const container = document.getElementById('game-container');
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().then(() => updateFullscreenState(true)).catch(() => {});
+      }
+    });
+
+    chkWindow.addEventListener('click', () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().then(() => updateFullscreenState(false)).catch(() => {});
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      updateFullscreenState(!!document.fullscreenElement);
+    });
+
+    // Zoom Controls
+    const zoomVal = document.getElementById('zoomVal');
+    document.getElementById('btnZoomIn').addEventListener('click', () => {
+      if (gameScale < 1.6) {
+        gameScale = parseFloat((gameScale + 0.1).toFixed(1));
+        zoomVal.innerText = gameScale.toFixed(1) + 'x';
+      }
+    });
+    document.getElementById('btnZoomOut').addEventListener('click', () => {
+      if (gameScale > 0.8) {
+        gameScale = parseFloat((gameScale - 0.1).toFixed(1));
+        zoomVal.innerText = gameScale.toFixed(1) + 'x';
+      }
+    });
+
+    // Game loop
+    let lastTime = performance.now();
+
+    function update(dt) {
+      if (isPaused) return;
+
+      // 1. Inputs & Intent
+      let inputX = 0;
+      let inputY = 0;
+
+      if (keys['w'] || keys['arrowup']) inputY -= 1;
+      if (keys['s'] || keys['arrowdown']) inputY += 1;
+      if (keys['a'] || keys['arrowleft']) inputX -= 1;
+      if (keys['d'] || keys['arrowright']) inputX += 1;
+
+      const isMoving = (inputX !== 0 || inputY !== 0);
+      const shiftPressed = !!(keys['shift'] || keys['z']);
+
+      // Stamina & Sprint Mechanics:
+      // Minimum stamina threshold required to reactivate sprint after exhaustion
+      const SPRINT_RECOVERY_THRESHOLD = 25;
+
+      // Rule 3: To sprint again, user must release Shift AND wait until stamina recovers past threshold
+      if (player.sprintExhausted) {
+        if (!shiftPressed && player.stamina >= SPRINT_RECOVERY_THRESHOLD) {
+          player.sprintExhausted = false;
+        }
+      }
+
+      // Check whether sprinting can occur
+      let isRunning = false;
+      if (!player.sprintExhausted && shiftPressed && isMoving && player.stamina > 0) {
+        isRunning = true;
+      }
+
+      // Update Stamina & handle exhaustion
+      if (isRunning) {
+        player.stamina = Math.max(0, player.stamina - dt * 25);
+        // Rule 1 & 2: When stamina <= 0, automatically force sprint to false and lock it
+        if (player.stamina <= 0) {
+          player.stamina = 0;
+          player.sprintExhausted = true;
+          isRunning = false; // Immediately revert to walk speed
+        }
+      } else {
+        // Natural stamina recovery when not sprinting
+        player.stamina = Math.min(player.maxStamina, player.stamina + dt * 15);
+      }
+
+      // Update SP HUD Bar & visual state
+      const spBar = document.getElementById('sp-bar');
+      if (spBar) {
+        spBar.style.width = (player.stamina / player.maxStamina * 100) + '%';
+        spBar.style.filter = player.sprintExhausted ? 'brightness(0.6)' : 'none';
+      }
+
+      // 2. Attack state update
+      if (player.isAttacking) {
+        player.attackTimer += dt;
+        const totalFrames = 8;
+        const frameProgress = (player.attackTimer / player.attackDuration) * totalFrames;
+        player.currentFrame = Math.min(totalFrames - 1, Math.floor(frameProgress));
+
+        if (player.attackTimer >= player.attackDuration) {
+          player.isAttacking = false;
+          player.attackTimer = 0;
+          player.currentFrame = 0;
+        }
+      }
+
+      // 3. Physics & Velocity (Smooth Acceleration + Friction)
+      if (!player.isAttacking) {
+        const currentSpeed = isRunning ? player.speedRun : player.speedWalk;
+        if (inputX !== 0 && inputY !== 0) {
+          const norm = 1 / Math.SQRT2;
+          inputX *= norm;
+          inputY *= norm;
+        }
+
+        const targetVx = inputX * currentSpeed;
+        const targetVy = inputY * currentSpeed;
+
+        player.vx += (targetVx - player.vx) * player.acceleration;
+        player.vy += (targetVy - player.vy) * player.acceleration;
+
+        // Facing Direction
+        if (Math.abs(inputX) > Math.abs(inputY)) {
+          if (inputX < 0) player.direction = DIR.LEFT;
+          if (inputX > 0) player.direction = DIR.RIGHT;
+        } else if (Math.abs(inputY) > 0.01) {
+          if (inputY < 0) player.direction = DIR.UP;
+          if (inputY > 0) player.direction = DIR.DOWN;
+        }
+      } else {
+        player.vx *= player.friction;
+        player.vy *= player.friction;
+      }
+
+      // 4. Collision Resolution (X & Y Separated)
+      const nextX = player.x + player.vx * dt;
+      const nextY = player.y + player.vy * dt;
+
+      // Check X
+      let canMoveX = true;
+      const testCenterX = nextX;
+      const currentCenterY = player.y + player.colliderOffsetY;
+
+      const hBox = house.collider;
+      if (checkCircleRectCollision(testCenterX, currentCenterY, player.colliderRadius, house.x + hBox.offsetX, house.y + hBox.offsetY, hBox.width, hBox.height)) {
+        canMoveX = false;
+      }
+      for (const dec of decorations) {
+        if (dec.type === 'rock' && checkCircleCircleCollision(testCenterX, currentCenterY, player.colliderRadius, dec.x, dec.y, dec.radius)) {
+          canMoveX = false;
+          break;
+        }
+      }
+      if (canMoveX) {
+        for (const tree of trees) {
+          if (Math.abs(currentCenterY - tree.baseY) < 60 && Math.abs(testCenterX - tree.baseX) < 60) {
+            if (checkCircleCircleCollision(testCenterX, currentCenterY, player.colliderRadius, tree.baseX, tree.baseY, tree.radius)) {
+              canMoveX = false;
+              break;
+            }
+          }
+        }
+      }
+      if (testCenterX - player.colliderRadius < 20 || testCenterX + player.colliderRadius > WORLD_WIDTH - 20) {
+        canMoveX = false;
+      }
+
+      if (canMoveX) player.x = nextX;
+      else player.vx = 0;
+
+      // Check Y
+      let canMoveY = true;
+      const currentCenterX = player.x;
+      const testCenterY = nextY + player.colliderOffsetY;
+
+      if (checkCircleRectCollision(currentCenterX, testCenterY, player.colliderRadius, house.x + hBox.offsetX, house.y + hBox.offsetY, hBox.width, hBox.height)) {
+        canMoveY = false;
+      }
+      for (const dec of decorations) {
+        if (dec.type === 'rock' && checkCircleCircleCollision(currentCenterX, testCenterY, player.colliderRadius, dec.x, dec.y, dec.radius)) {
+          canMoveY = false;
+          break;
+        }
+      }
+      if (canMoveY) {
+        for (const tree of trees) {
+          if (Math.abs(testCenterY - tree.baseY) < 60 && Math.abs(currentCenterX - tree.baseX) < 60) {
+            if (checkCircleCircleCollision(currentCenterX, testCenterY, player.colliderRadius, tree.baseX, tree.baseY, tree.radius)) {
+              canMoveY = false;
+              break;
+            }
+          }
+        }
+      }
+      if (testCenterY - player.colliderRadius < 30 || testCenterY + player.colliderRadius > WORLD_HEIGHT - 30) {
+        canMoveY = false;
+      }
+
+      if (canMoveY) player.y = nextY;
+      else player.vy = 0;
+
+      // 5. Animation State
+      const speedMagnitude = Math.hypot(player.vx, player.vy);
+      if (player.isAttacking) {
+        player.state = 'attack';
+      } else if (speedMagnitude > 80) {
+        player.state = isRunning ? 'run' : 'walk';
+      } else if (speedMagnitude > 10) {
+        player.state = 'walk';
+      } else {
+        player.state = 'idle';
+      }
+
+      if (!player.isAttacking) {
+        const animCfg = ANIM_CONFIG[player.state];
+        const maxFrames = animCfg.frames[player.direction] || 4;
+        player.animTimer += dt * animCfg.fps;
+        player.currentFrame = Math.floor(player.animTimer) % maxFrames;
+      }
+
+      camera.update(player.x, player.y);
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.scale(gameScale, gameScale);
+      ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+
+      // 1. Draw Cohesive Forest Ground (Solid Grass + Autotiled Paths + Natural Pixel Shadows)
+      if (!groundCanvasBuilt) {
+        buildGroundCanvas();
+      }
+      if (groundCanvasBuilt) {
+        ctx.drawImage(groundCanvas, 0, 0);
+      } else {
+        ctx.fillStyle = '#a6b04f';
+        ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      }
+
+      // 2. Y-Sorting Entities
+      const renderables = [];
+
+      // Trees, Stumps, Logs
+      for (const tree of trees) {
+        renderables.push({
+          y: tree.baseY,
+          draw: () => {
+            const img = assets[tree.type];
+            if (img && img.complete && img.naturalWidth > 0) {
+              ctx.drawImage(
+                img,
+                Math.round(tree.x - tree.w / 2),
+                Math.round(tree.y - tree.h / 2),
+                tree.w,
+                tree.h
+              );
+            }
+          }
+        });
+      }
+
+      // House
+      renderables.push({
+        y: house.y + house.height - 30,
+        draw: () => {
+          if (assets.house.complete && assets.house.naturalWidth > 0) {
+            ctx.drawImage(assets.house, house.x, house.y, house.width, house.height);
+          } else {
+            ctx.fillStyle = '#8b5a2b';
+            ctx.fillRect(house.x, house.y + 100, house.width, house.height - 100);
+          }
+          ctx.strokeStyle = 'rgba(255, 230, 100, 0.4)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(house.x + house.width / 2 - 25, house.y + house.height - 70, 50, 65);
+        }
+      });
+
+      // Rocks and Bushes
+      for (const dec of decorations) {
+        renderables.push({
+          y: dec.y,
+          draw: () => {
+            ctx.fillStyle = dec.color;
+            ctx.beginPath();
+            ctx.arc(dec.x, dec.y - 4, dec.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.beginPath();
+            ctx.arc(dec.x - dec.radius * 0.3, dec.y - dec.radius * 0.4 - 4, dec.radius * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+      }
+
+      // Player
+      renderables.push({
+        y: player.y + player.colliderOffsetY,
+        draw: () => {
+          const currentAnim = ANIM_CONFIG[player.state];
+          const sheetImg = assets[currentAnim.sheet];
+
+          const drawW = player.frameSize * player.drawScale;
+          const drawH = player.frameSize * player.drawScale;
+          const drawX = Math.round(player.x - drawW / 2);
+          const drawY = Math.round(player.y - drawH / 2);
+
+          if (sheetImg.complete && sheetImg.naturalWidth > 0) {
+            const sx = player.currentFrame * player.frameSize;
+            const sy = player.direction * player.frameSize;
+
+            ctx.drawImage(
+              sheetImg,
+              sx, sy, player.frameSize, player.frameSize,
+              drawX, drawY, drawW, drawH
+            );
+          } else {
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(player.x, player.y + player.colliderOffsetY, 16, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(player.x - 14, player.y - 20, 28, 40);
+          }
+        }
+      });
+
+      renderables.sort((a, b) => a.y - b.y);
+      for (const item of renderables) {
+        item.draw();
+      }
+
+      ctx.restore();
+    }
+
+    function gameLoop(time) {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      update(dt);
+      render();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
